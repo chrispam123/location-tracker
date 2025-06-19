@@ -1,0 +1,9 @@
+{
+  "name": "location-tracker",
+  "version": "1.0.0",
+  "scripts": {
+    "setup": "./scripts/setup.sh",
+    "build": "./scripts/build.sh",
+    "deploy": "./scripts/deploy.sh"
+  }
+}
