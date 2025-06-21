@@ -1,5 +1,4 @@
-const API_BASE_URL = 'https://4s3qwh5mzc.execute-api.us-east-1.amazonaws.com/dev';
-
+const API_BASE_URL = 'https://4s3qwh5mzc.execute-api.us-east-1.amazonaws.com/prod';
 export class ApiService {
   static async sendLocation(userId, latitude, longitude) {
     try {

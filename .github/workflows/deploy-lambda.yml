@@ -1,0 +1,58 @@
+name: Deploy Lambda
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'backend/lambda/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'backend/lambda/**'
+
+jobs:
+  deploy:
+    name: 'Deploy Lambda Function'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Install Lambda dependencies
+      working-directory: backend/lambda/location-handler
+      run: npm install --production
+
+    - name: Create deployment package
+      working-directory: backend/lambda/location-handler
+      run: |
+        zip -r ../../../location-handler.zip . -x "*.git*" "*.DS_Store*"
+
+    - name: Deploy to AWS Lambda (Production)
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        aws lambda update-function-code \
+          --function-name location-tracker-location-handler \
+          --zip-file fileb://location-handler.zip
+
+    - name: Validate deployment
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        aws lambda get-function \
+          --function-name location-tracker-location-handler \
+          --query 'Configuration.LastModified'
+
+    - name: Clean up
+      run: rm -f location-handler.zip

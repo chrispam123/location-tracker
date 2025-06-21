@@ -1,0 +1,84 @@
+name: Deploy Mobile App
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'mobile/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'mobile/**'
+
+jobs:
+  validate-app:
+    name: 'Validate Mobile App'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Setup Expo CLI
+      run: npm install -g @expo/cli
+
+    - name: Install app dependencies
+      working-directory: mobile
+      run: npm install
+
+    - name: Check app configuration
+      working-directory: mobile
+      run: npx expo config --type public
+
+    - name: Validate app builds
+      working-directory: mobile
+      run: npx expo export --platform all
+
+    - name: Run linting (if eslint configured)
+      working-directory: mobile
+      run: npm run lint --if-present
+
+  build-apk:
+    name: 'Build APK'
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: validate-app
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Setup EAS CLI
+      run: npm install -g eas-cli
+
+    - name: Install app dependencies
+      working-directory: mobile
+      run: npm install
+
+    - name: Create .env file from secrets
+      working-directory: mobile
+      run: |
+        echo "GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}" > .env
+
+    - name: Build APK (Preview)
+      working-directory: mobile
+      run: |
+        echo "APK build would run here"
+        echo "For actual APK builds, configure EAS Build with:"
+        echo "eas build --platform android --profile preview"
+
+    - name: Upload build artifacts
+      if: success()
+      run: |
+        echo "✅ App validation passed"
+        echo "✅ Ready for APK build with EAS"
