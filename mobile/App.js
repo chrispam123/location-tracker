@@ -106,7 +106,7 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Location Tracker</Text>
+      <Text style={styles.title}>Ubicación Williams actual</Text>
       
       {location && (
         <View style={styles.mapContainer}>
@@ -153,6 +153,7 @@ export default function App() {
         <View style={styles.statusContainer}>
           <Text style={styles.label}>User ID:</Text>
           <Text style={styles.value}>{userId}</Text>
+          
         </View>
 
         <View style={styles.statusContainer}>
