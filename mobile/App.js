@@ -9,10 +9,48 @@ import {
   Dimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
+import * as BackgroundFetch from 'expo-background-fetch';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker } from 'react-native-maps';
 import { LocationService } from './src/services/LocationService';
 import { ApiService } from './src/services/ApiService';
+
+const LOCATION_TASK_NAME = 'background-location-task';
+
+// Define the background task
+TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+  if (error) {
+    console.error('Background task error:', error);
+    return;
+  }
+
+  if (data) {
+    try {
+      // Get user ID from storage
+      const userId = await AsyncStorage.getItem('user_id');
+      
+      if (userId && data.locations && data.locations.length > 0) {
+        const location = data.locations[0];
+        
+        // Send location to API
+        const success = await ApiService.sendLocation(
+          userId,
+          location.coords.latitude,
+          location.coords.longitude
+        );
+        
+        if (success) {
+          console.log('Background location sent successfully');
+          // Store last sync time
+          await AsyncStorage.setItem('last_background_sync', new Date().toISOString());
+        }
+      }
+    } catch (error) {
+      console.error('Error in background task:', error);
+    }
+  }
+});
 
 export default function App() {
   const [location, setLocation] = useState(null);
@@ -20,6 +58,7 @@ export default function App() {
   const [isTracking, setIsTracking] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [locationHistory, setLocationHistory] = useState([]);
+  const [backgroundTaskRegistered, setBackgroundTaskRegistered] = useState(false);
 
   useEffect(() => {
     initializeApp();
@@ -42,14 +81,40 @@ export default function App() {
     }
 
     // Request background location permissions
-    if (Platform.OS === 'android') {
-      const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
-      if (backgroundStatus !== 'granted') {
-        Alert.alert('Background permission', 'Background location permission is recommended for continuous tracking.');
-      }
+    const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+    if (backgroundStatus !== 'granted') {
+      Alert.alert('Background permission', 'Background location permission is required for continuous tracking.');
+      return;
     }
 
-    startLocationTracking();
+    await startLocationTracking();
+    await setupBackgroundLocation();
+  };
+
+  const setupBackgroundLocation = async () => {
+    try {
+      // Check if background task is already registered
+      const isTaskDefined = TaskManager.isTaskDefined(LOCATION_TASK_NAME);
+      
+      if (isTaskDefined) {
+        // Start background location tracking
+        await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 10 * 60 * 1000, // 10 minutes
+          distanceInterval: 0, // Don't filter by distance
+          deferredUpdatesInterval: 10 * 60 * 1000, // 10 minutes
+          foregroundService: {
+            notificationTitle: 'Localización de Williams',
+            notificationBody: 'Tracking location in background',
+          },
+        });
+        
+        setBackgroundTaskRegistered(true);
+        console.log('Background location tracking started');
+      }
+    } catch (error) {
+      console.error('Error setting up background location:', error);
+    }
   };
 
   const startLocationTracking = async () => {
@@ -106,7 +171,7 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Ubicación Williams actual</Text>
+      <Text style={styles.title}>LOCALIZACIÓN DE WILLIAMS POR EL MUNDO</Text>
       
       {location && (
         <View style={styles.mapContainer}>
@@ -127,8 +192,8 @@ export default function App() {
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
               }}
-              title="Current Location"
-              description={`Accuracy: ${location.coords.accuracy?.toFixed(1)}m`}
+              title="Ubicación de Williams"
+              description={`Precisión: ${location.coords.accuracy?.toFixed(1)}m`}
               pinColor="red"
             />
             
@@ -140,7 +205,7 @@ export default function App() {
                   latitude: loc.latitude,
                   longitude: loc.longitude,
                 }}
-                title={`Location ${index + 1}`}
+                title={`Ubicación ${index + 1}`}
                 description={new Date(loc.timestamp).toLocaleTimeString()}
                 pinColor="blue"
               />
@@ -149,46 +214,16 @@ export default function App() {
         </View>
       )}
       
-      <View style={styles.infoContainer}>
-        <View style={styles.statusContainer}>
-          <Text style={styles.label}>User ID:</Text>
-          <Text style={styles.value}>{userId}</Text>
-          
-        </View>
-
-        <View style={styles.statusContainer}>
-          <Text style={styles.label}>Tracking Status:</Text>
-          <Text style={[styles.value, { color: isTracking ? 'green' : 'red' }]}>
-            {isTracking ? 'Active' : 'Inactive'}
-          </Text>
-        </View>
-
-        {location && (
-          <View style={styles.locationContainer}>
-            <Text style={styles.label}>Current Location:</Text>
-            <Text style={styles.coordinates}>
-              Lat: {location.coords.latitude.toFixed(6)}
-            </Text>
-            <Text style={styles.coordinates}>
-              Lng: {location.coords.longitude.toFixed(6)}
-            </Text>
-            <Text style={styles.accuracy}>
-              Accuracy: {location.coords.accuracy?.toFixed(1)}m
-            </Text>
-          </View>
-        )}
-
+      <View style={styles.statusContainer}>
+        <Text style={styles.statusText}>✅ Funcionando correctamente</Text>
+        <Text style={styles.statusText}>
+          {backgroundTaskRegistered ? '🔄 Tracking en segundo plano activo' : '⏳ Configurando tracking...'}
+        </Text>
         {lastSync && (
-          <View style={styles.statusContainer}>
-            <Text style={styles.label}>Last Sync:</Text>
-            <Text style={styles.value}>{lastSync}</Text>
-          </View>
+          <Text style={styles.lastSyncText}>
+            Última actualización: {lastSync}
+          </Text>
         )}
-
-        <View style={styles.statusContainer}>
-          <Text style={styles.label}>Location History:</Text>
-          <Text style={styles.value}>{locationHistory.length} points</Text>
-        </View>
       </View>
     </View>
   );
@@ -197,21 +232,23 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f0f8ff',
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     textAlign: 'center',
     marginTop: 50,
     marginBottom: 20,
-    color: '#333',
+    marginHorizontal: 15,
+    color: '#2c5282',
+    lineHeight: 28,
   },
   mapContainer: {
     flex: 1,
     marginHorizontal: 10,
     marginBottom: 10,
-    borderRadius: 10,
+    borderRadius: 15,
     overflow: 'hidden',
     elevation: 3,
     shadowColor: '#000',
@@ -222,48 +259,29 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  infoContainer: {
-    backgroundColor: '#f8f9fa',
-    padding: 15,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-  },
   statusContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 5,
-  },
-  locationContainer: {
-    marginVertical: 10,
+    backgroundColor: '#ffffff',
+    padding: 20,
+    marginHorizontal: 15,
+    marginBottom: 20,
+    borderRadius: 15,
     alignItems: 'center',
-    backgroundColor: '#e9ecef',
-    padding: 10,
-    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
-  label: {
-    fontSize: 14,
+  statusText: {
+    fontSize: 18,
     fontWeight: '600',
-    color: '#495057',
+    color: '#22543d',
+    marginBottom: 8,
   },
-  value: {
-    fontSize: 14,
-    color: '#333',
+  lastSyncText: {
+    fontSize: 16,
+    color: '#4a5568',
     fontWeight: '500',
-  },
-  coordinates: {
-    fontSize: 12,
-    color: '#333',
-    fontFamily: 'monospace',
-  },
-  accuracy: {
-    fontSize: 11,
-    color: '#6c757d',
-    marginTop: 3,
   },
   text: {
     marginTop: 10,
