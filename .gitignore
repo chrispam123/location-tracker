@@ -1,6 +1,8 @@
 node_modules/
 *.log
 .env
+mobile/.env
+*.env
 .terraform/
 terraform.tfstate*
 mobile/dist/
