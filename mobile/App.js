@@ -6,9 +6,11 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Dimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import MapView, { Marker } from 'react-native-maps';
 import { LocationService } from './src/services/LocationService';
 import { ApiService } from './src/services/ApiService';
 
@@ -17,6 +19,7 @@ export default function App() {
   const [userId, setUserId] = useState(null);
   const [isTracking, setIsTracking] = useState(false);
   const [lastSync, setLastSync] = useState(null);
+  const [locationHistory, setLocationHistory] = useState([]);
 
   useEffect(() => {
     initializeApp();
@@ -75,6 +78,15 @@ export default function App() {
         
         if (success) {
           setLastSync(new Date().toLocaleTimeString());
+          
+          // Add to location history
+          const newLocationPoint = {
+            latitude: currentLocation.coords.latitude,
+            longitude: currentLocation.coords.longitude,
+            timestamp: Date.now(),
+          };
+          
+          setLocationHistory(prev => [...prev, newLocationPoint].slice(-10)); // Keep last 10 locations
         }
       }
     } catch (error) {
@@ -96,39 +108,87 @@ export default function App() {
     <View style={styles.container}>
       <Text style={styles.title}>Location Tracker</Text>
       
-      <View style={styles.statusContainer}>
-        <Text style={styles.label}>User ID:</Text>
-        <Text style={styles.value}>{userId}</Text>
-      </View>
-
-      <View style={styles.statusContainer}>
-        <Text style={styles.label}>Tracking Status:</Text>
-        <Text style={[styles.value, { color: isTracking ? 'green' : 'red' }]}>
-          {isTracking ? 'Active' : 'Inactive'}
-        </Text>
-      </View>
-
       {location && (
-        <View style={styles.locationContainer}>
-          <Text style={styles.label}>Current Location:</Text>
-          <Text style={styles.coordinates}>
-            Lat: {location.coords.latitude.toFixed(6)}
-          </Text>
-          <Text style={styles.coordinates}>
-            Lng: {location.coords.longitude.toFixed(6)}
-          </Text>
-          <Text style={styles.accuracy}>
-            Accuracy: {location.coords.accuracy?.toFixed(1)}m
-          </Text>
+        <View style={styles.mapContainer}>
+          <MapView
+            style={styles.map}
+            region={{
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+            showsUserLocation={true}
+            followsUserLocation={true}
+          >
+            {/* Current location marker */}
+            <Marker
+              coordinate={{
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+              }}
+              title="Current Location"
+              description={`Accuracy: ${location.coords.accuracy?.toFixed(1)}m`}
+              pinColor="red"
+            />
+            
+            {/* Location history markers */}
+            {locationHistory.map((loc, index) => (
+              <Marker
+                key={index}
+                coordinate={{
+                  latitude: loc.latitude,
+                  longitude: loc.longitude,
+                }}
+                title={`Location ${index + 1}`}
+                description={new Date(loc.timestamp).toLocaleTimeString()}
+                pinColor="blue"
+              />
+            ))}
+          </MapView>
         </View>
       )}
-
-      {lastSync && (
+      
+      <View style={styles.infoContainer}>
         <View style={styles.statusContainer}>
-          <Text style={styles.label}>Last Sync:</Text>
-          <Text style={styles.value}>{lastSync}</Text>
+          <Text style={styles.label}>User ID:</Text>
+          <Text style={styles.value}>{userId}</Text>
         </View>
-      )}
+
+        <View style={styles.statusContainer}>
+          <Text style={styles.label}>Tracking Status:</Text>
+          <Text style={[styles.value, { color: isTracking ? 'green' : 'red' }]}>
+            {isTracking ? 'Active' : 'Inactive'}
+          </Text>
+        </View>
+
+        {location && (
+          <View style={styles.locationContainer}>
+            <Text style={styles.label}>Current Location:</Text>
+            <Text style={styles.coordinates}>
+              Lat: {location.coords.latitude.toFixed(6)}
+            </Text>
+            <Text style={styles.coordinates}>
+              Lng: {location.coords.longitude.toFixed(6)}
+            </Text>
+            <Text style={styles.accuracy}>
+              Accuracy: {location.coords.accuracy?.toFixed(1)}m
+            </Text>
+          </View>
+        )}
+
+        {lastSync && (
+          <View style={styles.statusContainer}>
+            <Text style={styles.label}>Last Sync:</Text>
+            <Text style={styles.value}>{lastSync}</Text>
+          </View>
+        )}
+
+        <View style={styles.statusContainer}>
+          <Text style={styles.label}>Location History:</Text>
+          <Text style={styles.value}>{locationHistory.length} points</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -137,50 +197,77 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 30,
+    textAlign: 'center',
+    marginTop: 50,
+    marginBottom: 20,
     color: '#333',
   },
+  mapContainer: {
+    flex: 1,
+    marginHorizontal: 10,
+    marginBottom: 10,
+    borderRadius: 10,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  map: {
+    flex: 1,
+  },
+  infoContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+  },
   statusContainer: {
-    marginVertical: 10,
-    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 5,
   },
   locationContainer: {
-    marginVertical: 20,
+    marginVertical: 10,
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    padding: 15,
-    borderRadius: 10,
+    backgroundColor: '#e9ecef',
+    padding: 10,
+    borderRadius: 8,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#666',
-    marginBottom: 5,
+    color: '#495057',
   },
   value: {
     fontSize: 14,
     color: '#333',
+    fontWeight: '500',
   },
   coordinates: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#333',
     fontFamily: 'monospace',
   },
   accuracy: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 5,
+    fontSize: 11,
+    color: '#6c757d',
+    marginTop: 3,
   },
   text: {
     marginTop: 10,
     fontSize: 16,
     color: '#666',
+    textAlign: 'center',
   },
 });
