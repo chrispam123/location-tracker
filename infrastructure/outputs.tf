@@ -17,3 +17,13 @@ output "api_gateway_id" {
   description = "ID of the API Gateway"
   value       = aws_api_gateway_rest_api.location_api.id
 }
+
+output "dashboard_url" {
+  description = "URL of the dashboard (CloudFront)"
+  value       = "https://${aws_cloudfront_distribution.frontend_distribution.domain_name}"
+}
+
+output "s3_bucket_name" {
+  description = "Name of the S3 bucket for frontend"
+  value       = aws_s3_bucket.frontend_bucket.bucket
+}

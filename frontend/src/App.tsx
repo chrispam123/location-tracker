@@ -124,11 +124,55 @@ const App: React.FC = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string>('24'); // 24 hours default
-  const [lastUpdate, setLastUpdate] = useState<string | null>(null);
-  const [totalLocations, setTotalLocations] = useState<number>(0);
+  const [filter, setFilter] = useState<string>(() => {
+    // Restore filter from localStorage
+    return localStorage.getItem('dashboard-filter') || '24';
+  });
+  const [lastUpdate, setLastUpdate] = useState<string | null>(() => {
+    // Restore last update from localStorage
+    return localStorage.getItem('dashboard-last-update') || null;
+  });
+  const [totalLocations, setTotalLocations] = useState<number>(() => {
+    // Restore total locations from localStorage
+    const saved = localStorage.getItem('dashboard-total-locations');
+    return saved ? parseInt(saved) : 0;
+  });
 
   const mapCenter: MapCenter = { lat: 40.4168, lng: -3.7038 }; // Madrid default
+
+  // Save state to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('dashboard-filter', filter);
+  }, [filter]);
+
+  useEffect(() => {
+    if (lastUpdate) {
+      localStorage.setItem('dashboard-last-update', lastUpdate);
+    }
+  }, [lastUpdate]);
+
+  useEffect(() => {
+    localStorage.setItem('dashboard-total-locations', totalLocations.toString());
+  }, [totalLocations]);
+
+  useEffect(() => {
+    if (locations.length > 0) {
+      localStorage.setItem('dashboard-locations', JSON.stringify(locations));
+    }
+  }, [locations]);
+
+  // Restore locations from localStorage on mount
+  useEffect(() => {
+    const savedLocations = localStorage.getItem('dashboard-locations');
+    if (savedLocations) {
+      try {
+        const parsedLocations = JSON.parse(savedLocations);
+        setLocations(parsedLocations);
+      } catch (error) {
+        console.error('Error parsing saved locations:', error);
+      }
+    }
+  }, []);
 
   const fetchLocations = async (): Promise<void> => {
     try {
@@ -191,7 +235,12 @@ const App: React.FC = () => {
   };
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
-    setFilter(e.target.value);
+    const newFilter = e.target.value;
+    setFilter(newFilter);
+    // Clear cached data when filter changes
+    localStorage.removeItem('dashboard-locations');
+    localStorage.removeItem('dashboard-last-update');
+    localStorage.removeItem('dashboard-total-locations');
   };
 
   const getFilterLabel = (filterValue: string): string => {
