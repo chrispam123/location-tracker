@@ -11,12 +11,22 @@ import {
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
+import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker } from 'react-native-maps';
 import { LocationService } from './src/services/LocationService';
 import { ApiService } from './src/services/ApiService';
 
 const LOCATION_TASK_NAME = 'background-location-task';
+
+// Configure notifications
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: false,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
 
 // Define the background task
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
@@ -65,6 +75,12 @@ export default function App() {
   }, []);
 
   const initializeApp = async () => {
+    // Request notification permissions
+    const { status: notificationStatus } = await Notifications.requestPermissionsAsync();
+    if (notificationStatus !== 'granted') {
+      Alert.alert('Permisos', 'Se necesitan permisos de notificación para el funcionamiento continuo.');
+    }
+
     // Generate or retrieve user ID
     let storedUserId = await AsyncStorage.getItem('user_id');
     if (!storedUserId) {
@@ -89,6 +105,7 @@ export default function App() {
 
     await startLocationTracking();
     await setupBackgroundLocation();
+    await showPersistentNotification();
   };
 
   const setupBackgroundLocation = async () => {
@@ -104,8 +121,9 @@ export default function App() {
           distanceInterval: 0, // Don't filter by distance
           deferredUpdatesInterval: 10 * 60 * 1000, // 10 minutes
           foregroundService: {
-            notificationTitle: 'Localización de Williams',
-            notificationBody: 'Tracking location in background',
+            notificationTitle: 'Localización de Williams activa',
+            notificationBody: 'Manteniendo ubicación actualizada cada 10 minutos',
+            notificationColor: '#2c5282',
           },
         });
         
@@ -114,6 +132,22 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error setting up background location:', error);
+    }
+  };
+
+  const showPersistentNotification = async () => {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '📍 Localización Williams',
+          body: 'Funcionando correctamente en segundo plano',
+          data: { persistent: true },
+          sticky: true,
+        },
+        trigger: null, // Show immediately
+      });
+    } catch (error) {
+      console.error('Error showing notification:', error);
     }
   };
 
