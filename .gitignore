@@ -2,6 +2,7 @@ node_modules/
 *.log
 .env
 mobile/.env
+frontend/.env
 *.env
 .terraform/
 terraform.tfstate*

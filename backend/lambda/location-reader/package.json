@@ -1,0 +1,9 @@
+{
+  "name": "location-reader",
+  "version": "1.0.0",
+  "description": "Lambda function to read location data from DynamoDB",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.1000.0"
+  }
+}
